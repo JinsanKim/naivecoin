@@ -14,14 +14,14 @@ const initHttpServer = ( myHttpPort: number ) => {
     app.get('/blocks', (req, res) => {
         res.send(getBlockchain());
     });
-    app.post('/mineBlock', (req, res) => {
+    app.post('/mineblock', (req, res) => {
         const newBlock: Block = generateNextBlock(req.body.data);
         res.send(newBlock);
     });
     app.get('/peers', (req, res) => {
         res.send(getSockets().map(( s: any ) => s._socket.remoteAddress + ':' + s._socket.remotePort));
     });
-    app.post('/addPeer', (req, res) => {
+    app.post('/addpeer', (req, res) => {
         connectToPeers(req.body.peer);
         res.send();
     });
