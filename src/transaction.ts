@@ -1,16 +1,16 @@
+import * as _ from 'lodash';
 import * as CryptoJS from 'crypto-js';
 import * as ecdsa from 'elliptic';
-import * as _ from 'lodash'
 
 const ec = new ecdsa.ec('secp256k1');
 
 const COINBASE_AMOUNT: number = 50;
 
 class UnspentTxOut {
-    public readonly txOutId: string;
-    public readonly txOutIndex: number;
-    public readonly address: string;
-    public readonly amount: number;
+    readonly txOutId: string;
+    readonly txOutIndex: number;
+    readonly address: string;
+    readonly amount: number;
 
     constructor(txOutId: string, txOutIndex: number, address: string, amount: number) {
         this.txOutId = txOutId;
@@ -21,27 +21,21 @@ class UnspentTxOut {
 }
 
 class TxIn {
-    public txOutId: string;
-    public txOutIndex: number;
-    public signature: string;
+    txOutId: string;
+    txOutIndex: number;
+    signature: string;
 }
 
 class TxOut {
-    public address: string;
-    public amount: number;
-
-    constructor(address: string, amount: number) {
-        this.address = address;
-        this.amount = amount;
+    constructor(public address: string, public amount: number) {
     }
 }
 
 class Transaction {
+    id: string;
 
-    public id: string;
-
-    public txIns: TxIn[];
-    public txOuts: TxOut[];
+    txIns: TxIn[];
+    txOuts: TxOut[];
 }
 
 const getTransactionId = (transaction: Transaction): string => {
@@ -57,7 +51,6 @@ const getTransactionId = (transaction: Transaction): string => {
 };
 
 const validateTransaction = (transaction: Transaction, aUnspentTxOuts: UnspentTxOut[]): boolean => {
-
     if (getTransactionId(transaction) !== transaction.id) {
         console.log('invalid tx id: ' + transaction.id);
         return false;
@@ -112,7 +105,7 @@ const validateBlockTransactions = (aTransactions: Transaction[], aUnspentTxOuts:
 };
 
 const hasDuplicates = (txIns: TxIn[]): boolean => {
-    const groups = _.countBy(txIns, (txIn) => txIn.txOutId + txIn.txOutId);
+    const groups = _.countBy(txIns, (txIn) => txIn.txOutId + txIn.txOutIndex);
     return _(groups)
         .map((value, key) => {
             if (value > 1) {
@@ -155,8 +148,8 @@ const validateCoinbaseTx = (transaction: Transaction, blockIndex: number): boole
 
 const validateTxIn = (txIn: TxIn, transaction: Transaction, aUnspentTxOuts: UnspentTxOut[]): boolean => {
     const referencedUTxOut: UnspentTxOut =
-        aUnspentTxOuts.find((uTxO) => uTxO.txOutId === txIn.txOutId && uTxO.txOutId === txIn.txOutId);
-    if (referencedUTxOut == null) {
+        aUnspentTxOuts.find((uTxO) => uTxO.txOutId === txIn.txOutId && uTxO.txOutIndex === txIn.txOutIndex);
+    if (!referencedUTxOut) {    // find will return undefined if everything is not matched.
         console.log('referenced txOut not found: ' + JSON.stringify(txIn));
         return false;
     }
@@ -167,7 +160,8 @@ const validateTxIn = (txIn: TxIn, transaction: Transaction, aUnspentTxOuts: Unsp
 };
 
 const getTxInAmount = (txIn: TxIn, aUnspentTxOuts: UnspentTxOut[]): number => {
-    return findUnspentTxOut(txIn.txOutId, txIn.txOutIndex, aUnspentTxOuts).amount;
+    const txOut = findUnspentTxOut(txIn.txOutId, txIn.txOutIndex, aUnspentTxOuts);
+    return !_.isUndefined(txOut) ? txOut.amount : 0;
 };
 
 const findUnspentTxOut = (transactionId: string, index: number, aUnspentTxOuts: UnspentTxOut[]): UnspentTxOut => {
@@ -230,7 +224,6 @@ const updateUnspentTxOuts = (newTransactions: Transaction[], aUnspentTxOuts: Uns
 };
 
 const processTransactions = (aTransactions: Transaction[], aUnspentTxOuts: UnspentTxOut[], blockIndex: number) => {
-
     if (!isValidTransactionsStructure(aTransactions)) {
         return null;
     }
@@ -239,6 +232,7 @@ const processTransactions = (aTransactions: Transaction[], aUnspentTxOuts: Unspe
         console.log('invalid block transactions');
         return null;
     }
+
     return updateUnspentTxOuts(aTransactions, aUnspentTxOuts);
 };
 
@@ -253,8 +247,8 @@ const getPublicKey = (aPrivateKey: string): string => {
 };
 
 const isValidTxInStructure = (txIn: TxIn): boolean => {
-    if (txIn == null) {
-        console.log('txIn is null');
+    if (!txIn) {
+        console.log('txIn is null or undefined');
         return false;
     } else if (typeof txIn.signature !== 'string') {
         console.log('invalid signature type in txIn');
@@ -271,8 +265,8 @@ const isValidTxInStructure = (txIn: TxIn): boolean => {
 };
 
 const isValidTxOutStructure = (txOut: TxOut): boolean => {
-    if (txOut == null) {
-        console.log('txOut is null');
+    if (!txOut) {
+        console.log('txOut is null or undefined');
         return false;
     } else if (typeof txOut.address !== 'string') {
         console.log('invalid address type in txOut');
@@ -289,9 +283,14 @@ const isValidTxOutStructure = (txOut: TxOut): boolean => {
 };
 
 const isValidTransactionsStructure = (transactions: Transaction[]): boolean => {
-    return transactions
-        .map(isValidTransactionStructure)
-        .reduce((a, b) => (a && b), true);
+    return _.every(transactions, isValidTransactionStructure);
+};
+
+const isValidArrayInstance = <T>(arr: T[], test: (elem: T) => boolean): boolean => {
+    if (!(arr instanceof Array)) {
+        return false;
+    }
+    return _.every(arr, test);
 };
 
 const isValidTransactionStructure = (transaction: Transaction) => {
@@ -299,26 +298,16 @@ const isValidTransactionStructure = (transaction: Transaction) => {
         console.log('transactionId missing');
         return false;
     }
-    if (!(transaction.txIns instanceof Array)) {
+
+    if (isValidArrayInstance(transaction.txIns, isValidTxInStructure)) {
         console.log('invalid txIns type in transaction');
         return false;
     }
-    if (!transaction.txIns
-            .map(isValidTxInStructure)
-            .reduce((a, b) => (a && b), true)) {
+    if (isValidArrayInstance(transaction.txOuts, isValidTxOutStructure)) {
+        console.log('invalid txOuts type in transaction');
         return false;
     }
 
-    if (!(transaction.txOuts instanceof Array)) {
-        console.log('invalid txIns type in transaction');
-        return false;
-    }
-
-    if (!transaction.txOuts
-            .map(isValidTxOutStructure)
-            .reduce((a, b) => (a && b), true)) {
-        return false;
-    }
     return true;
 };
 
