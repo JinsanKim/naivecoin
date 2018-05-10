@@ -299,11 +299,11 @@ const isValidTransactionStructure = (transaction: Transaction) => {
         return false;
     }
 
-    if (isValidArrayInstance(transaction.txIns, isValidTxInStructure)) {
+    if (!isValidArrayInstance(transaction.txIns, isValidTxInStructure)) {
         console.log('invalid txIns type in transaction');
         return false;
     }
-    if (isValidArrayInstance(transaction.txOuts, isValidTxOutStructure)) {
+    if (!isValidArrayInstance(transaction.txOuts, isValidTxOutStructure)) {
         console.log('invalid txOuts type in transaction');
         return false;
     }
